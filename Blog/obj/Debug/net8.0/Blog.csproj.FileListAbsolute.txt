@@ -39,3 +39,4 @@ C:\Users\samsu\RiderProjects\Blog\Blog\obj\Debug\net8.0\Blog.pdb
 C:\Users\samsu\RiderProjects\Blog\Blog\obj\Debug\net8.0\Blog.genruntimeconfig.cache
 C:\Users\samsu\RiderProjects\Blog\Blog\obj\Debug\net8.0\ref\Blog.dll
 C:\Users\samsu\RiderProjects\Blog\Blog\bin\Debug\net8.0\BCrypt.Net-Next.dll
+C:\Users\samsu\RiderProjects\Blog\Blog\obj\Debug\net8.0\Blog.sourcelink.json

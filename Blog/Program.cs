@@ -46,7 +46,7 @@ var jwtOptions = builder.Configuration
     
 builder.Services.AddSingleton(jwtOptions);
 
-// 👇 Configuring the Authentication Service
+// Configuring the Authentication Service
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opts =>
     {
@@ -66,7 +66,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 👇 Configuring the Authorization Service
+// Configuring the Authorization Service
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -80,6 +80,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

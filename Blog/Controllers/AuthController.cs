@@ -14,7 +14,7 @@ namespace Blog.Controllers;
 public class AuthController : ControllerBase
 {
     private IConfiguration _config;
-    private static List<UserModel> _users = new ();
+    public static List<UserModel> _users = new ();
 
     public AuthController(IConfiguration configuration)
     {
@@ -61,9 +61,8 @@ public class AuthController : ControllerBase
             UserId = Guid.NewGuid(),
             Email = newUserRequest.Email,
             PasswordHash = hashedPassword,
-            Role = newUserRequest.Role
+            Role = newUserRequest.Role,
         };
-        _users.Add(newUser);
 
         // Генерация токенов
         var accessToken = GenerateJSONWebToken(newUser, TimeSpan.FromHours(2));
@@ -72,6 +71,8 @@ public class AuthController : ControllerBase
         newUser.RefreshToken = refreshToken.Token;
         newUser.RefreshTokenExpiryTime = refreshToken.Expiry;
 
+        _users.Add(newUser);
+        
         return Ok(new
         {
             AccessToken = accessToken,
@@ -104,6 +105,34 @@ public class AuthController : ControllerBase
         });
     }
     
+    [AllowAnonymous]
+    [HttpPost("refresh-token")]
+    public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest("Invalid input.");
+        }
+
+        var user = _users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
+        if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
+        {
+            return BadRequest("Refresh Token is invalid or has expired.");
+        }
+
+        var newAccessToken = GenerateJSONWebToken(user, TimeSpan.FromHours(2));
+        var newRefreshToken = GenerateRefreshToken();
+
+        user.RefreshToken = newRefreshToken.Token;
+        user.RefreshTokenExpiryTime = newRefreshToken.Expiry;
+
+        return Ok(new
+        {
+            AccessToken = newAccessToken,
+            RefreshToken = newRefreshToken.Token
+        });
+    }
+    
     [Authorize(Roles = "Author")]
     [HttpGet("author-only")]
     public IActionResult AuthorEndpoint()
@@ -125,6 +154,7 @@ public class AuthController : ControllerBase
 
         var claims = new List<Claim>
         {
+            new Claim(ClaimTypes.NameIdentifier, userInfo.UserId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, userInfo.Email),
             new Claim(ClaimTypes.Role, userInfo.Role),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
@@ -145,4 +175,7 @@ public class AuthController : ControllerBase
         var refreshToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
         return (refreshToken, DateTime.UtcNow.AddDays(7));
     }
+    
+    
+
 }
