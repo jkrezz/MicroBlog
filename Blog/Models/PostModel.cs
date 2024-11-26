@@ -2,16 +2,20 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace Blog.Models;
+
+/// <summary>
+/// Модель поста.
+/// </summary>
 public class PostModel
 {
     /// <summary>
-    /// Уникальный идентификатор поста.
+    /// Nдентификатор поста.
     /// </summary>
     [Key]
     public Guid PostId { get; set; } = Guid.NewGuid();
 
     /// <summary>
-    /// Идентификатор автора (ссылка на пользователя).
+    /// Идентификатор автора.
     /// </summary>
     [Required(ErrorMessage = "AuthorId is required.")]
     public Guid AuthorId { get; set; }

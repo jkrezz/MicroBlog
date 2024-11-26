@@ -21,6 +21,9 @@ public class AuthController : ControllerBase
         _config = configuration;
     }
 
+    /// <summary>
+    /// Регистрация.
+    /// </summary>
     [AllowAnonymous]
     [HttpPost("register")]
     public IActionResult Register([FromBody] RegisterRequest newUserRequest)
@@ -80,6 +83,9 @@ public class AuthController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Вход.
+    /// </summary>
     [AllowAnonymous]
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest loginRequest)
@@ -105,6 +111,9 @@ public class AuthController : ControllerBase
         });
     }
     
+    /// <summary>
+    /// Refresh-token.
+    /// </summary>
     [AllowAnonymous]
     [HttpPost("refresh-token")]
     public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
@@ -133,6 +142,7 @@ public class AuthController : ControllerBase
         });
     }
     
+    // Tests
     [Authorize(Roles = "Author")]
     [HttpGet("author-only")]
     public IActionResult AuthorEndpoint()
@@ -140,6 +150,7 @@ public class AuthController : ControllerBase
         return Ok("You have access to this endpoint because you are an Author!");
     }
 
+    // Tests
     [Authorize]
     [HttpGet("protected")]
     public IActionResult ProtectedEndpoint()
@@ -147,6 +158,7 @@ public class AuthController : ControllerBase
         return Ok("You have access to this protected endpoint!");
     }
 
+    // Генерация JWT 
     private string GenerateJSONWebToken(UserModel userInfo, TimeSpan expiryDuration)
     {
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JwtOptions:SigningKey"]));
@@ -169,7 +181,7 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
-
+    
     private (string Token, DateTime Expiry) GenerateRefreshToken()
     {
         var refreshToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());

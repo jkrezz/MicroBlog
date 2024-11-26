@@ -30,10 +30,4 @@ public class ImageModel
     /// Дата создания изображения.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
-    /// Навигационное свойство для связи с постом.
-    /// </summary>
-    [ForeignKey("PostId")]
-    public PostModel Post { get; set; }
 }

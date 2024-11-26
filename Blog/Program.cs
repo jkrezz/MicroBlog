@@ -2,15 +2,24 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Blog;
+using Microsoft.OpenApi.Models;
+using Minio;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
+// Настройка MinIO клиента
+builder.Services.AddSingleton<IMinioClient>(provider =>
+    new MinioClient()
+        .WithEndpoint("127.0.0.1:9000")
+        .WithCredentials("minioadmin", "minioadmin")
+        .WithSSL(false)
+        .Build());
 
 // Add services to the container.
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
@@ -37,7 +46,11 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "API", Version = "v1" });
+    c.OperationFilter<FileUploadOperation>();
 });
+
+
 
 
 var jwtOptions = builder.Configuration
@@ -86,3 +99,42 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
+
+// Операция возможности добавление изображения (Реализация из Swashbuckle)
+public class FileUploadOperation : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var fileParams = context.MethodInfo
+            .GetParameters()
+            .Where(p => p.ParameterType == typeof(IFormFile));
+
+        if (fileParams.Any())
+        {
+            operation.RequestBody = new OpenApiRequestBody
+            {
+                Content = new Dictionary<string, OpenApiMediaType>
+                {
+                    ["multipart/form-data"] = new OpenApiMediaType
+                    {
+                        Schema = new OpenApiSchema
+                        {
+                            Type = "object",
+                            Properties = new Dictionary<string, OpenApiSchema>
+                            {
+                                ["image"] = new OpenApiSchema
+                                {
+                                    Type = "string",
+                                    Format = "binary"
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+    }
+}
+

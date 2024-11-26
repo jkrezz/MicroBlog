@@ -1,6 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 namespace Blog.Models;
 
+/// <summary>
+/// Модель пользователя.
+/// </summary>
 public class UserModel
 {
     /// <summary>
