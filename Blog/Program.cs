@@ -4,7 +4,6 @@ using System.Text;
 using Blog;
 using Microsoft.OpenApi.Models;
 using Minio;
-using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 // Настройка MinIO клиента
@@ -18,28 +17,27 @@ builder.Services.AddSingleton<IMinioClient>(provider =>
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer",
         BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Введите JWT токен в формате: Bearer {your token}"
+        In = ParameterLocation.Header,
+        Description = "Введите JWT токен в формате: Bearer {токен}"
     });
 
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            new OpenApiSecurityScheme
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Reference = new OpenApiReference
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 }
             },
@@ -49,9 +47,6 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "API", Version = "v1" });
     c.OperationFilter<FileUploadOperation>();
 });
-
-
-
 
 var jwtOptions = builder.Configuration
     .GetSection("JwtOptions")
@@ -99,42 +94,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
-
-
-// Операция возможности добавление изображения (Реализация из Swashbuckle)
-public class FileUploadOperation : IOperationFilter
-{
-    public void Apply(OpenApiOperation operation, OperationFilterContext context)
-    {
-        var fileParams = context.MethodInfo
-            .GetParameters()
-            .Where(p => p.ParameterType == typeof(IFormFile));
-
-        if (fileParams.Any())
-        {
-            operation.RequestBody = new OpenApiRequestBody
-            {
-                Content = new Dictionary<string, OpenApiMediaType>
-                {
-                    ["multipart/form-data"] = new OpenApiMediaType
-                    {
-                        Schema = new OpenApiSchema
-                        {
-                            Type = "object",
-                            Properties = new Dictionary<string, OpenApiSchema>
-                            {
-                                ["image"] = new OpenApiSchema
-                                {
-                                    Type = "string",
-                                    Format = "binary"
-                                }
-                            }
-                        }
-                    }
-                }
-            };
-        }
-    }
-}
 

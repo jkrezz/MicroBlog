@@ -13,8 +13,8 @@ namespace Blog.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private IConfiguration _config;
-    public static List<UserModel> _users = new ();
+    private readonly IConfiguration _config;
+    public static List<UserModel> Users = new();
 
     public AuthController(IConfiguration configuration)
     {
@@ -38,9 +38,9 @@ public class AuthController : ControllerBase
         }
         
         // Проверка на уникальность email
-        if (_users.Any(u => u.Email == newUserRequest.Email))
+        if (Users.Any(u => u.Email == newUserRequest.Email))
         {
-            return Forbid("Email already registered.");
+            return StatusCode(StatusCodes.Status403Forbidden, "Email already registered.");
         }
 
         // Проверка на валидность email с помощью регулярного выражения
@@ -68,13 +68,13 @@ public class AuthController : ControllerBase
         };
 
         // Генерация токенов
-        var accessToken = GenerateJSONWebToken(newUser, TimeSpan.FromHours(2));
+        var accessToken = GenerateJsonWebToken(newUser, TimeSpan.FromHours(2));
         var refreshToken = GenerateRefreshToken();
 
         newUser.RefreshToken = refreshToken.Token;
         newUser.RefreshTokenExpiryTime = refreshToken.Expiry;
 
-        _users.Add(newUser);
+        Users.Add(newUser);
         
         return Ok(new
         {
@@ -90,15 +90,15 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest loginRequest)
     {
-        var user = _users.FirstOrDefault(u => u.Email == loginRequest.Email);
+        var user = Users.FirstOrDefault(u => u.Email == loginRequest.Email);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(loginRequest.Password, user.PasswordHash))
         {
-            return Forbid("Invalid email or password.");
+            return StatusCode(StatusCodes.Status403Forbidden, "Invalid email or password.");
         }
 
         // Генерация токенов
-        var accessToken = GenerateJSONWebToken(user, TimeSpan.FromHours(2));
+        var accessToken = GenerateJsonWebToken(user, TimeSpan.FromHours(2));
         var refreshToken = GenerateRefreshToken();
 
         user.RefreshToken = refreshToken.Token;
@@ -123,13 +123,13 @@ public class AuthController : ControllerBase
             return BadRequest("Invalid input.");
         }
 
-        var user = _users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
+        var user = Users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
         if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
         {
             return BadRequest("Refresh Token is invalid or has expired.");
         }
 
-        var newAccessToken = GenerateJSONWebToken(user, TimeSpan.FromHours(2));
+        var newAccessToken = GenerateJsonWebToken(user, TimeSpan.FromHours(2));
         var newRefreshToken = GenerateRefreshToken();
 
         user.RefreshToken = newRefreshToken.Token;
@@ -141,25 +141,9 @@ public class AuthController : ControllerBase
             RefreshToken = newRefreshToken.Token
         });
     }
-    
-    // Tests
-    [Authorize(Roles = "Author")]
-    [HttpGet("author-only")]
-    public IActionResult AuthorEndpoint()
-    {
-        return Ok("You have access to this endpoint because you are an Author!");
-    }
-
-    // Tests
-    [Authorize]
-    [HttpGet("protected")]
-    public IActionResult ProtectedEndpoint()
-    {
-        return Ok("You have access to this protected endpoint!");
-    }
 
     // Генерация JWT 
-    private string GenerateJSONWebToken(UserModel userInfo, TimeSpan expiryDuration)
+    private string GenerateJsonWebToken(UserModel userInfo, TimeSpan expiryDuration)
     {
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JwtOptions:SigningKey"]));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -182,12 +166,10 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
     
+    // Генерация Refresh
     private (string Token, DateTime Expiry) GenerateRefreshToken()
     {
         var refreshToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
         return (refreshToken, DateTime.UtcNow.AddDays(7));
     }
-    
-    
-
 }
