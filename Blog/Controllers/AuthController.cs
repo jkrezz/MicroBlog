@@ -22,7 +22,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Регистрация.
+    /// Регистрирация нового пользователя.
     /// </summary>
     [AllowAnonymous]
     [HttpPost("register")]
@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Вход.
+    /// Вход пользователя.
     /// </summary>
     [AllowAnonymous]
     [HttpPost("login")]

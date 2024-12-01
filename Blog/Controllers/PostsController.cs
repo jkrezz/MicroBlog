@@ -12,8 +12,8 @@ namespace Blog.Controllers;
 public class PostsController : ControllerBase
 {
     // Локальное хранилище постов
-    private static readonly List<PostModel> Posts = new();
-    private static readonly HashSet<string> UsedIdempotencyKeys = new();
+    public static readonly List<PostModel> Posts = new();
+    public static readonly HashSet<string> UsedIdempotencyKeys = new();
     private readonly IMinioClient _minioClient;
 
     public PostsController(IMinioClient minioClient)
