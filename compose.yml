@@ -1,0 +1,35 @@
+services:
+  api:
+    image: blog-service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "8080:80"
+      - "8443:443"
+    depends_on:
+      minio:
+        condition: service_started
+    networks:
+      - app-network
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_storage:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server --console-address ":9001" /data
+    
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  minio_storage: {}
