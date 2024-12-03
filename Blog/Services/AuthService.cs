@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
 using Blog.Models;
+using Blog.Repositories.Interfaces;
 using Blog.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -16,12 +17,12 @@ namespace Blog.Services;
 public class AuthService : IAuthService
 {
     private readonly IConfiguration _config;
-    private readonly List<UserModel> _users;
+    private readonly IUserRepository _userRepository;
 
-    public AuthService(IConfiguration config)
+    public AuthService(IUserRepository userRepository, IConfiguration config)
     {
+        _userRepository = userRepository;
         _config = config;
-        _users = new List<UserModel>();
     }
 
     /// <summary>
@@ -31,7 +32,7 @@ public class AuthService : IAuthService
     {
         ValidateRegisterRequest(request);
 
-        if (_users.Any(u => u.Email == request.Email))
+        if (_userRepository.UserExists(request.Email))
         {
             throw new InvalidOperationException("Email already registered.");
         }
@@ -54,7 +55,7 @@ public class AuthService : IAuthService
         newUser.RefreshToken = refreshToken.Token;
         newUser.RefreshTokenExpiryTime = refreshToken.Expiry;
 
-        _users.Add(newUser);
+        _userRepository.AddUser(newUser);
 
         return (accessToken, refreshToken.Token);
     }
@@ -64,7 +65,7 @@ public class AuthService : IAuthService
     /// </summary>
     public (string AccessToken, string RefreshToken) Login(LoginRequest request)
     {
-        var user = _users.FirstOrDefault(u => u.Email == request.Email);
+        var user = _userRepository.GetUserByEmail(request.Email);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
@@ -85,7 +86,7 @@ public class AuthService : IAuthService
     /// </summary>
     public (string AccessToken, string RefreshToken) RefreshToken(RefreshTokenRequest request)
     {
-        var user = _users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
+        var user = _userRepository.GetAllUsers().FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
 
         if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
         {

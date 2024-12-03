@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Blog;
+using Blog.Repositories;
+using Blog.Repositories.Interfaces;
 using Blog.Services;
 using Blog.Services.Interfaces;
 using Microsoft.OpenApi.Models;
@@ -16,11 +18,16 @@ builder.Services.AddSingleton<IMinioClient>(provider =>
         .WithSSL(false)
         .Build());
 
-// Add services to the container.
-builder.Services.AddSingleton<IAuthService, AuthService>();
-builder.Services.AddSingleton<IPostService, PostService>();
+builder.Services.AddScoped<IIdempotencyKeysRepository, IdempotencyKeysRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IPostRepository, PostRepository>();
+builder.Services.AddScoped<IPostService, PostService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 builder.Services.AddControllers();
+
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

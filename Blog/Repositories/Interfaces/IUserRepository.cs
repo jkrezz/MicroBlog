@@ -1,6 +1,11 @@
-namespace Blog.Repositories.Interfaces;
+using Blog.Models;
+using System.Collections.Generic;
 
-public class IUserRepository
+namespace Blog.Repositories.Interfaces;
+public interface IUserRepository
 {
-    
+    List<UserModel> GetAllUsers();          // Получение всех пользователей
+    void AddUser(UserModel user);           // Добавление пользователя
+    UserModel GetUserByEmail(string email); // Получение пользователя по email
+    bool UserExists(string email);          // Проверка, существует ли пользователь
 }

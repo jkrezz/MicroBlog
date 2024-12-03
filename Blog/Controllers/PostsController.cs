@@ -119,7 +119,7 @@ public class PostsController : ControllerBase
         try
         {
             var userRole = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
-            var userId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier).Value;
 
             if (userRole == "Author")
             {

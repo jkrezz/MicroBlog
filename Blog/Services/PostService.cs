@@ -1,4 +1,5 @@
 using Blog.Models;
+using Blog.Repositories.Interfaces;
 using Blog.Services.Interfaces;
 using Minio;
 using Minio.DataModel.Args;
@@ -8,29 +9,29 @@ namespace Blog.Services
     public class PostService : IPostService
     {
         private readonly IMinioClient _minioClient;
-        private readonly List<PostModel> _posts;
-        private readonly HashSet<string> _usedIdempotencyKeys;
+        private readonly IPostRepository _postRepository;
+        private readonly IIdempotencyKeysRepository _usedIdempotencyKeys;
 
-        public PostService(IMinioClient minioClient)
+        public PostService(IMinioClient minioClient, IPostRepository postRepository, IIdempotencyKeysRepository idempotencyKeysRepository)
         {
             _minioClient = minioClient;
-            _posts = new List<PostModel>();
-            _usedIdempotencyKeys = new HashSet<string>();
+            _postRepository = postRepository;
+            _usedIdempotencyKeys = idempotencyKeysRepository;
         }
 
         public async Task<PostModel?> GetPostByIdAsync(Guid id)
         {
-            return _posts.FirstOrDefault(p => p.PostId == id);
+            return await _postRepository.GetPostByIdAsync(id);
         }
 
         public async Task<List<PostModel>> GetPostsByAuthorIdAsync(Guid authorId)
         {
-            return _posts.Where(p => p.AuthorId == authorId).ToList();
+            return await _postRepository.GetPostsByAuthorIdAsync(authorId);
         }
 
         public async Task<List<PostModel>> GetPublishedPostsAsync()
         {
-            return _posts.Where(p => p.Status == "Published").ToList();
+            return await _postRepository.GetPublishedPostsAsync();
         }
 
         public async Task<PostModel> CreatePostAsync(string authorId, CreatePostRequest postRequest)
@@ -50,7 +51,7 @@ namespace Blog.Services
                 Status = "Draft"
             };
 
-            _posts.Add(newPost);
+            await _postRepository.AddPostAsync(newPost);
             _usedIdempotencyKeys.Add(postRequest.IdempotencyKey);
 
             return newPost;
@@ -58,7 +59,7 @@ namespace Blog.Services
 
         public async Task<PostModel?> UpdatePostAsync(Guid postId, string authorId, UpdatePost updatePost)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = await _postRepository.GetPostByIdAsync(postId);
             if (post == null || post.AuthorId.ToString() != authorId)
                 return null;
 
@@ -66,12 +67,15 @@ namespace Blog.Services
             post.Content = updatePost.Content;
             post.UpdatedAt = DateTime.UtcNow;
 
+            await _postRepository.UpdatePostAsync(post);
+
             return post;
         }
 
+
         public async Task<bool> DeleteImageAsync(Guid postId, Guid imageId, string authorId)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = await _postRepository.GetPostByIdAsync(postId);
             if (post == null || post.AuthorId.ToString() != authorId)
                 return false;
 
@@ -93,7 +97,7 @@ namespace Blog.Services
 
         public async Task<List<ImageModel>> AddImagesToPostAsync(Guid postId, string authorId, List<IFormFile> images)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = await _postRepository.GetPostByIdAsync(postId);
             if (post == null || post.AuthorId.ToString() != authorId)
                 throw new UnauthorizedAccessException("Access denied.");
 
@@ -142,14 +146,17 @@ namespace Blog.Services
 
         public async Task<PostModel?> PublishPostAsync(Guid postId, string authorId, PublishPostRequest request)
         {
-            var post = _posts.FirstOrDefault(p => p.PostId == postId);
+            var post = await _postRepository.GetPostByIdAsync(postId);
             if (post == null || post.AuthorId.ToString() != authorId)
                 return null;
 
             post.Status = request.Status;
             post.UpdatedAt = DateTime.UtcNow;
 
+            await _postRepository.UpdatePostAsync(post);
+
             return post;
         }
+
     }
 }
