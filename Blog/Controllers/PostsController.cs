@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Blog.Models;
+using Blog.Services.Interfaces;
 using Minio;
 using Minio.DataModel.Args;
 
@@ -11,345 +12,151 @@ namespace Blog.Controllers;
 [Route("api/[controller]")]
 public class PostsController : ControllerBase
 {
-    // Локальное хранилище постов
-    public static readonly List<PostModel> Posts = new();
-    public static readonly HashSet<string> UsedIdempotencyKeys = new();
-    private readonly IMinioClient _minioClient;
+    private readonly IPostService _postService;
 
-    public PostsController(IMinioClient minioClient)
+    public PostsController(IPostService postService)
     {
-        _minioClient = minioClient;
+        _postService = postService;
     }
 
-    /// <summary>
-    /// Создание нового поста.
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpPost]
-    public IActionResult CreatePost([FromBody] CreatePostRequest postRequest)
+    public async Task<IActionResult> CreatePost([FromBody] CreatePostRequest postRequest)
     {
-        if (string.IsNullOrWhiteSpace(postRequest.IdempotencyKey) ||
-            string.IsNullOrWhiteSpace(postRequest.Title) ||
-            string.IsNullOrWhiteSpace(postRequest.Content))
+        try
         {
-            return BadRequest("All fields are required.");
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var newPost = await _postService.CreatePostAsync(authorId, postRequest);
+            return CreatedAtAction(nameof(GetPostById), new { id = newPost.PostId }, newPost);
         }
-
-        if (UsedIdempotencyKeys.Contains(postRequest.IdempotencyKey))
+        catch (Exception ex)
         {
-            return Conflict("IdempotencyKey has already been used.");
+            return BadRequest(new { Message = ex.Message });
         }
-
-        // Извлечение идентификатора текущего пользователя
-        var authorId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (string.IsNullOrEmpty(authorId))
-        {
-            return Unauthorized("User is not authenticated.");
-        }
-
-        // Создание нового поста
-        var newPost = new PostModel
-        {
-            PostId = Guid.NewGuid(),
-            AuthorId = Guid.Parse(authorId),
-            IdempotencyKey = postRequest.IdempotencyKey,
-            Title = postRequest.Title,
-            Content = postRequest.Content,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-            Status = "Draft"
-        };
-
-        // Сохранение поста и ключа идемпотентности
-        Posts.Add(newPost);
-        UsedIdempotencyKeys.Add(postRequest.IdempotencyKey);
-
-        return CreatedAtAction(nameof(GetPostById), new { id = newPost.PostId }, newPost);
     }
 
-    /// <summary>
-    /// Добавление картинок к посту.
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpPost("{postId}/images")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> AddImagesToPost([FromRoute] Guid postId, [FromForm] List<IFormFile>? images)
+    public async Task<IActionResult> AddImagesToPost([FromRoute] Guid postId, [FromForm] List<IFormFile> images)
     {
-        var post = Posts.FirstOrDefault(p => p.PostId == postId);
-
-        if (post == null)
-        {
-            return NotFound("Post not found.");
-        }
-
-        // Проверка прав доступа
-        var authorId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (post.AuthorId.ToString() != authorId)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, "Access denied.");
-        }
-
-        if (images == null || !images.Any())
-        {
-            return BadRequest("Image file is required.");
-        }
-
-        var bucketName = "post-images";
-
-        var uploadedImages = new List<ImageModel>();
-
         try
         {
-            // Проверка существования бакета
-            var bucketExistsArgs = new BucketExistsArgs().WithBucket(bucketName);
-
-            if (!await _minioClient.BucketExistsAsync(bucketExistsArgs).ConfigureAwait(false))
-            {
-                var makeBucketArgs = new MakeBucketArgs().WithBucket(bucketName);
-
-                await _minioClient.MakeBucketAsync(makeBucketArgs).ConfigureAwait(false);
-            }
-
-            foreach (var image in images)
-            {
-                if (image.Length == 0) continue;
-                var id = Guid.NewGuid();
-                var objectName = $"{postId}/{id}";
-
-                // Загрузка файла
-                using (var stream = image.OpenReadStream())
-                {
-                    var putObjectArgs = new PutObjectArgs()
-                        .WithBucket(bucketName)
-                        .WithObject(objectName)
-                        .WithStreamData(stream)
-                        .WithObjectSize(image.Length)
-                        .WithContentType(image.ContentType);
-
-                    await _minioClient.PutObjectAsync(putObjectArgs).ConfigureAwait(false);
-                }
-
-                // Создание ссылки
-                var presignedGetObjectArgs = new PresignedGetObjectArgs()
-                    .WithBucket(bucketName)
-                    .WithObject(objectName)
-                    .WithExpiry(60 * 60);
-
-                var imageUrl = await _minioClient.PresignedGetObjectAsync(presignedGetObjectArgs);
-
-                // Добавление изображения в список
-                var newImage = new ImageModel
-                {
-                    ImageId = id,
-                    PostId = postId,
-                    ImageUrl = imageUrl,
-                    CreatedAt = DateTime.UtcNow
-                };
-                post.Images.Add(newImage);
-
-                uploadedImages.Add(newImage);
-            }
-
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var uploadedImages = await _postService.AddImagesToPostAsync(postId, authorId, images);
             return Created("", new { UploadedImages = uploadedImages });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Failed to upload images. Error: {ex.Message}");
+            return BadRequest(new { Message = ex.Message });
         }
     }
 
-
-    /// <summary>
-    /// Редактирование поста по id.
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpPut("{postId}")]
-    public IActionResult EditPost([FromRoute] Guid postId, [FromBody] UpdatePost updatePost)
+    public async Task<IActionResult> EditPost([FromRoute] Guid postId, [FromBody] UpdatePost updatePost)
     {
-        var post = Posts.FirstOrDefault(p => p.PostId == postId);
-
-        if (post == null)
+        try
         {
-            return NotFound("Post not found.");
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var updatedPost = await _postService.UpdatePostAsync(postId, authorId, updatePost);
+
+            if (updatedPost == null)
+                return NotFound("Post not found or access denied.");
+
+            return Ok(new { Message = "Post successfully updated.", UpdatedPost = updatedPost });
         }
-
-        // Проверка прав доступа
-        var authorId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (post.AuthorId.ToString() != authorId)
+        catch (Exception ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, "Access denied.");
+            return BadRequest(new { Message = ex.Message });
         }
-
-        if (string.IsNullOrWhiteSpace(updatePost.Title) ||
-            string.IsNullOrWhiteSpace(updatePost.Content))
-        {
-            return BadRequest("All fields are required.");
-        }
-
-        post.Title = updatePost.Title;
-        post.Content = updatePost.Content;
-        post.UpdatedAt = DateTime.UtcNow;
-
-
-        return Ok(new
-        {
-            Message = "Post successfully updated.",
-            UpdatedPost = post
-        });
     }
 
-    /// <summary>
-    /// Удаление картинки из MinIO
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpDelete("{postId}/images/{imageId}")]
     public async Task<IActionResult> DeleteImages([FromRoute] Guid postId, [FromRoute] Guid imageId)
     {
-        var post = Posts.FirstOrDefault(p => p.PostId == postId);
-
-        if (post == null)
-        {
-            return NotFound("Post not found.");
-        }
-
-        // Проверка прав доступа
-        var authorId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (post.AuthorId.ToString() != authorId)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, "Access denied.");
-        }
-
-        var image = post.Images.FirstOrDefault(p => p.ImageId == imageId);
-
-        if (image == null)
-        {
-            return NotFound("Image not found.");
-        }
-
         try
         {
-            var bucketName = "post-images";
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var success = await _postService.DeleteImageAsync(postId, imageId, authorId);
 
-            // Удаление картинки из MinIO
-            var removeObjectArgs = new RemoveObjectArgs()
-                .WithBucket(bucketName)
-                .WithObject($"{postId}/{imageId}");
-
-            await _minioClient.RemoveObjectAsync(removeObjectArgs).ConfigureAwait(false);
-
-            // Удаление картинки из базы данных (имитация)
-            post.Images.Remove(image);
+            if (!success)
+                return NotFound("Image or post not found, or access denied.");
 
             return Ok(new { Message = "Image successfully deleted." });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Failed to delete image. Error: {ex.Message}");
+            return BadRequest(new { Message = ex.Message });
         }
     }
 
-    /// <summary>
-    /// Опубликовать пост
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpPatch("{postId}/status")]
-    public IActionResult PublishPost([FromRoute] Guid postId, [FromBody] PublishPostRequest request)
+    public async Task<IActionResult> PublishPost([FromRoute] Guid postId, [FromBody] PublishPostRequest request)
     {
-        var post = Posts.FirstOrDefault(p => p.PostId == postId);
-
-        if (post == null)
+        try
         {
-            return NotFound("Post not found.");
+            var authorId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            var updatedPost = await _postService.PublishPostAsync(postId, authorId, request);
+
+            if (updatedPost == null)
+                return NotFound("Post not found or access denied.");
+
+            return Ok(new { Message = "Post successfully published.", UpdatedPost = updatedPost });
         }
-
-        // Проверка прав доступа
-        var authorId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (post.AuthorId.ToString() != authorId)
+        catch (Exception ex)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, "Access denied.");
+            return BadRequest(new { Message = ex.Message });
         }
-
-        var validStatuses = new[] { "Published", "Draft" };
-
-        if (string.IsNullOrEmpty(request.Status) || !validStatuses.Contains(request.Status))
-        {
-            return BadRequest($"Invalid status value.");
-        }
-
-        post.Status = request.Status;
-
-        post.UpdatedAt = DateTime.UtcNow;
-
-        return Ok(new
-        {
-            Message = "Post successfully published.",
-            UpdatedPost = post
-        });
     }
 
-    /// <summary>
-    /// Вернуть все посты
-    /// </summary>
     [Authorize]
     [HttpGet]
-    public IActionResult GetPosts()
+    public async Task<IActionResult> GetPosts()
     {
-        // Получение роли пользователя
-        var userRole = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
-
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-
-        if (string.IsNullOrEmpty(userRole) || string.IsNullOrEmpty(userId))
+        try
         {
-            return Unauthorized("Unable to determine user role or ID.");
-        }
+            var userRole = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
+            var userId = User.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
 
-        // Автору вернуть все посты
-        if (userRole == "Author")
-        {
-            var authorPosts = Posts.Where(p => p.AuthorId.ToString() == userId).ToList();
-
-            return Ok(new
+            if (userRole == "Author")
             {
-                Message = "List of posts for the author.",
-                Posts = authorPosts
-            });
-        }
+                var posts = await _postService.GetPostsByAuthorIdAsync(Guid.Parse(userId));
+                return Ok(new { Message = "List of posts for the author.", Posts = posts });
+            }
 
-        // Читателям доступны посты со статусом "Published"
-        if (userRole == "Reader")
-        {
-            var publishedPosts = Posts.Where(p => p.Status == "Published").ToList();
-
-            return Ok(new
+            if (userRole == "Reader")
             {
-                Message = "List of posts published.",
-                Posts = publishedPosts
-            });
-        }
+                var posts = await _postService.GetPublishedPostsAsync();
+                return Ok(new { Message = "List of published posts.", Posts = posts });
+            }
 
-        return StatusCode(StatusCodes.Status403Forbidden, "Access denied.");
+            return Forbid("Access denied.");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
-    /// <summary>
-    /// Получение поста по его идентификатору.
-    /// </summary>
     [Authorize(Roles = "Author")]
     [HttpGet("{id}")]
-    public IActionResult GetPostById(Guid id)
+    public async Task<IActionResult> GetPostById([FromRoute] Guid id)
     {
-        var post = Posts.FirstOrDefault(p => p.PostId == id);
-
-        if (post == null)
+        try
         {
-            return NotFound("Post not found.");
-        }
+            var post = await _postService.GetPostByIdAsync(id);
 
-        return Ok(post);
+            if (post == null)
+                return NotFound("Post not found.");
+
+            return Ok(post);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 }

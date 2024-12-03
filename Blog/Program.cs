@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Blog;
+using Blog.Services;
+using Blog.Services.Interfaces;
 using Microsoft.OpenApi.Models;
 using Minio;
 
@@ -15,7 +17,8 @@ builder.Services.AddSingleton<IMinioClient>(provider =>
         .Build());
 
 // Add services to the container.
-
+builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<IPostService, PostService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
