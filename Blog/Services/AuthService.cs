@@ -2,10 +2,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
+using Blog.Exceptions;
 using Blog.Models;
 using Blog.Repositories.Interfaces;
 using Blog.Services.Interfaces;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Blog.Services;
@@ -34,7 +34,7 @@ public class AuthService : IAuthService
 
         if (_userRepository.UserExists(request.Email))
         {
-            throw new InvalidOperationException("Email already registered.");
+            throw new ForbiddenException("Email already registered.");
         }
 
         var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
@@ -69,7 +69,7 @@ public class AuthService : IAuthService
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            throw new UnauthorizedAccessException("Invalid email or password.");
+            throw new ForbiddenException("Invalid email or password.");
         }
 
         var accessToken = GenerateJsonWebToken(user, TimeSpan.FromHours(2));
@@ -90,7 +90,7 @@ public class AuthService : IAuthService
 
         if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
         {
-            throw new UnauthorizedAccessException("Refresh Token is invalid.");
+            throw new BadRequestException("Refresh Token is invalid.");
         }
 
         var newAccessToken = GenerateJsonWebToken(user, TimeSpan.FromHours(2));
@@ -108,17 +108,17 @@ public class AuthService : IAuthService
             string.IsNullOrWhiteSpace(request.Password) ||
             string.IsNullOrWhiteSpace(request.Role))
         {
-            throw new ArgumentException("All fields are required.");
+            throw new BadRequestException("All fields are required.");
         }
 
         if (!Regex.IsMatch(request.Email, @"^[^\s@]+@[^\s@]+\.[^\s@]+$"))
         {
-            throw new ArgumentException("Invalid email format.");
+            throw new BadRequestException("Invalid email format.");
         }
 
         if (request.Role != "Author" && request.Role != "Reader")
         {
-            throw new ArgumentException("Invalid role.");
+            throw new BadRequestException("Invalid role.");
         }
     }
 

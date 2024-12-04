@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Blog;
+using Blog.Middlewares;
 using Blog.Repositories;
 using Blog.Repositories.Interfaces;
 using Blog.Services;
@@ -19,10 +20,14 @@ builder.Services.AddSingleton<IMinioClient>(provider =>
         .Build());
 
 builder.Services.AddScoped<IIdempotencyKeysRepository, IdempotencyKeysRepository>();
+builder.Services.AddSingleton<IMinioRepository, MinioRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPostRepository, PostRepository>();
+
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+builder.Services.AddTransient<ExceptionHandlingMiddleware>();
 
 builder.Services.AddControllers();
 
@@ -83,8 +88,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(signingKeyBytes)
         };
     });
-
-// Configuring the Authorization Service
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -93,7 +96,7 @@ app.UseSwagger();
 app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "BlogService API v1"));
 
 app.UseHttpsRedirection();
-
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 

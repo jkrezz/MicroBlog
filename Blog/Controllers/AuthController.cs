@@ -26,61 +26,36 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public IActionResult Register([FromBody] RegisterRequest newUserRequest)
     {
-        try
+        var tokens = _authService.Register(newUserRequest);
+        return Ok(new
         {
-            var tokens = _authService.Register(newUserRequest);
-            return Ok(new
-            {
-                tokens.AccessToken,
-                tokens.RefreshToken
-            });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
-        }
+            tokens.AccessToken,
+            tokens.RefreshToken
+        });
     }
 
     [AllowAnonymous]
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest loginRequest)
     {
-        try
+        var tokens = _authService.Login(loginRequest);
+        return Ok(new
         {
-            var tokens = _authService.Login(loginRequest);
-            return Ok(new
-            {
-                tokens.AccessToken,
-                tokens.RefreshToken
-            });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, ex.Message);
-        }
+            tokens.AccessToken,
+            tokens.RefreshToken
+        });
     }
 
     [AllowAnonymous]
     [HttpPost("refresh-token")]
     public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        try
+        var tokens = _authService.RefreshToken(request);
+        return Ok(new
         {
-            var tokens = _authService.RefreshToken(request);
-            return Ok(new
-            {
-                tokens.AccessToken,
-                tokens.RefreshToken
-            });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return BadRequest(ex.Message);
-        }
+            tokens.AccessToken,
+            tokens.RefreshToken
+        });
     }
 }
 
