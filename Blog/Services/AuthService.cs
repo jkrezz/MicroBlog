@@ -13,7 +13,6 @@ namespace Blog.Services;
 /// <summary>
 /// Сервис для работы с пользователями
 /// </summary>
-
 public class AuthService : IAuthService
 {
     private readonly IConfiguration _config;
@@ -28,11 +27,11 @@ public class AuthService : IAuthService
     /// <summary>
     /// Регистрация нового пользователя.
     /// </summary>
-    public (string AccessToken, string RefreshToken) Register(RegisterRequest request)
+    public async Task<(string AccessToken, string RefreshToken)> RegisterAsync(RegisterRequest request)
     {
         ValidateRegisterRequest(request);
 
-        if (_userRepository.UserExists(request.Email))
+        if (await _userRepository.UserExistsAsync(request.Email))
         {
             throw new ForbiddenException("Email already registered.");
         }
@@ -55,7 +54,7 @@ public class AuthService : IAuthService
         newUser.RefreshToken = refreshToken.Token;
         newUser.RefreshTokenExpiryTime = refreshToken.Expiry;
 
-        _userRepository.AddUser(newUser);
+        await _userRepository.AddUserAsync(newUser);
 
         return (accessToken, refreshToken.Token);
     }
@@ -63,9 +62,9 @@ public class AuthService : IAuthService
     /// <summary>
     /// Аутентификация пользователя.
     /// </summary>
-    public (string AccessToken, string RefreshToken) Login(LoginRequest request)
+    public async Task<(string AccessToken, string RefreshToken)> LoginAsync(LoginRequest request)
     {
-        var user = _userRepository.GetUserByEmail(request.Email);
+        var user = await _userRepository.GetUserByEmailAsync(request.Email);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
@@ -78,15 +77,18 @@ public class AuthService : IAuthService
         user.RefreshToken = refreshToken.Token;
         user.RefreshTokenExpiryTime = refreshToken.Expiry;
 
+        await _userRepository.UpdateUserAsync(user);
+
         return (accessToken, refreshToken.Token);
     }
 
     /// <summary>
     /// Обновление токена.
     /// </summary>
-    public (string AccessToken, string RefreshToken) RefreshToken(RefreshTokenRequest request)
+    public async Task<(string AccessToken, string RefreshToken)> RefreshTokenAsync(RefreshTokenRequest request)
     {
-        var user = _userRepository.GetAllUsers().FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
+        var users = await _userRepository.GetAllUsersAsync();
+        var user = users.FirstOrDefault(u => u.RefreshToken == request.RefreshToken);
 
         if (user == null || user.RefreshTokenExpiryTime < DateTime.UtcNow)
         {
@@ -98,6 +100,8 @@ public class AuthService : IAuthService
 
         user.RefreshToken = newRefreshToken.Token;
         user.RefreshTokenExpiryTime = newRefreshToken.Expiry;
+        
+        await _userRepository.UpdateUserAsync(user);
 
         return (newAccessToken, newRefreshToken.Token);
     }

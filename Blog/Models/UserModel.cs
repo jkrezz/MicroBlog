@@ -9,6 +9,7 @@ public class UserModel
     /// <summary>
     /// Уникальный идентификатор пользователя.
     /// </summary>
+    [Key]
     public Guid UserId { get; set; } = Guid.NewGuid();
 
     /// <summary>

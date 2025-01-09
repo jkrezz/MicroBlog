@@ -11,6 +11,7 @@ public class PostModel
     /// <summary>
     /// Идентификатор поста.
     /// </summary>
+    [Key]
     public Guid PostId { get; set; } = Guid.NewGuid();
 
     /// <summary>

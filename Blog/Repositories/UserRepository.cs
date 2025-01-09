@@ -1,36 +1,59 @@
 using Blog.Models;
-using Blog.Services.Interfaces;
-using System.Collections.Generic;
-using System.Linq;
 using Blog.Repositories.Interfaces;
+using Blog.Data;
+using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace Blog.Repositories;
-
-public class UserRepository : IUserRepository
+namespace Blog.Repositories
 {
-    private static List<UserModel> _users = new();
-
-    // Метод для получения всех пользователей
-    public List<UserModel> GetAllUsers()
+    public class UserRepository : IUserRepository
     {
-        return _users;
-    }
+        private readonly UsersDbContext _context;
 
-    // Метод для добавления нового пользователя
-    public void AddUser(UserModel user)
-    {
-        _users.Add(user);
-    }
+        public UserRepository(UsersDbContext context)
+        {
+            _context = context;
+        }
 
-    // Метод для получения пользователя по email
-    public UserModel GetUserByEmail(string email)
-    {
-        return _users.FirstOrDefault(u => u.Email == email);
-    }
+        /// <summary>
+        /// Получение всех пользователей.
+        /// </summary>
+        public async Task<List<UserModel>> GetAllUsersAsync()
+        {
+            return await _context.Users.ToListAsync();
+        }
 
-    // Метод для проверки существования пользователя
-    public bool UserExists(string email)
-    {
-        return _users.Any(u => u.Email == email);
+        /// <summary>
+        /// Добавление нового пользователя.
+        /// </summary>
+        public async Task AddUserAsync(UserModel user)
+        {
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Получение пользователя по email.
+        /// </summary>
+        public async Task<UserModel> GetUserByEmailAsync(string email)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        /// <summary>
+        /// Проверка существования пользователя.
+        /// </summary>
+        public async Task<bool> UserExistsAsync(string email)
+        {
+            return await _context.Users.AnyAsync(u => u.Email == email);
+        }
+        
+        public async Task UpdateUserAsync(UserModel user)
+        {
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+        }
+
     }
 }

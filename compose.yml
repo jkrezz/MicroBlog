@@ -12,6 +12,10 @@ services:
     depends_on:
       minio:
         condition: service_started
+      users_db:
+        condition: service_healthy
+      posts_db:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -26,10 +30,50 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     command: server --console-address ":9001" /data
-    
+  
+  users_db:
+    image: postgres
+    container_name: users_db
+    environment:
+      POSTGRES_DB: usersdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 2025
+    ports:
+      - "5432:5432"
+    networks:
+      - app-network
+    volumes:
+      - users-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  
+  posts_db:
+    image: postgres
+    container_name: posts_db
+    environment:
+      POSTGRES_DB: postsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 2025
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+    volumes:
+      - posts-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  
 networks:
   app-network:
     driver: bridge
 
 volumes:
   minio_storage: {}
+  users-db-data: { }
+  posts-db-data: { }

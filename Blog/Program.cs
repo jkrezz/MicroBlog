@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Blog;
+using Blog.Data;
 using Blog.Middlewares;
 using Blog.Repositories;
 using Blog.Repositories.Interfaces;
 using Blog.Services;
 using Blog.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Minio;
 
@@ -19,7 +21,13 @@ builder.Services.AddSingleton<IMinioClient>(provider =>
         .WithSSL(false)
         .Build());
 
-builder.Services.AddScoped<IIdempotencyKeysRepository, IdempotencyKeysRepository>();
+builder.Services.AddDbContext<UsersDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("UsersDbConnection")));
+
+// Настройка DbContext для PostsDbContext
+builder.Services.AddDbContext<PostsDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PostsDbConnection")));
+
 builder.Services.AddSingleton<IMinioRepository, MinioRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPostRepository, PostRepository>();

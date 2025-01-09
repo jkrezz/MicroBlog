@@ -11,13 +11,11 @@ namespace Blog.Services
     {
         private readonly IMinioRepository _minioRepository;
         private readonly IPostRepository _postRepository;
-        private readonly IIdempotencyKeysRepository _usedIdempotencyKeys;
 
-        public PostService(IMinioRepository minioRepository, IPostRepository postRepository, IIdempotencyKeysRepository idempotencyKeysRepository)
+        public PostService(IMinioRepository minioRepository, IPostRepository postRepository)
         {
             _minioRepository = minioRepository;
             _postRepository = postRepository;
-            _usedIdempotencyKeys = idempotencyKeysRepository;
         }
 
         public async Task<PostModel?> GetPostByIdAsync(Guid id)
@@ -37,9 +35,12 @@ namespace Blog.Services
 
         public async Task<PostModel> CreatePostAsync(string authorId, CreatePostRequest postRequest)
         {
-            if (_usedIdempotencyKeys.Contains(postRequest.IdempotencyKey))
+            // Проверяем, существует ли пост с таким IdempotencyKey в базе данных
+            var existingPost = await _postRepository.GetPostByIdempotencyKeyAsync(postRequest.IdempotencyKey);
+            if (existingPost != null)
                 throw new ConflictException("IdempotencyKey has already been used.");
 
+            // Создаем новый пост
             var newPost = new PostModel
             {
                 PostId = Guid.NewGuid(),
@@ -52,11 +53,12 @@ namespace Blog.Services
                 Status = "Draft"
             };
 
+            // Сохраняем новый пост в базе данных
             await _postRepository.AddPostAsync(newPost);
-            _usedIdempotencyKeys.Add(postRequest.IdempotencyKey);
 
             return newPost;
         }
+
 
         public async Task<PostModel?> UpdatePostAsync(Guid postId, string authorId, UpdatePost updatePost)
         {
@@ -95,7 +97,7 @@ namespace Blog.Services
             await _minioRepository.DeleteObjectAsync(bucketName, objectName);
 
             post.Images.Remove(image);
-
+            await _postRepository.UpdatePostAsync(post);
             return true;
         }
 
@@ -132,10 +134,9 @@ namespace Blog.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                post.Images.Add(newImage);
+                await _postRepository.AddImageAsync(newImage);
                 uploadedImages.Add(newImage);
             }
-
             return uploadedImages;
         }
 

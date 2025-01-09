@@ -1,12 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt; 
-using System.Security.Claims;
-using System.Text;     
 using Microsoft.AspNetCore.Mvc;
 using Blog.Models;
-using System.Text.RegularExpressions;
-using Blog.Services;
 using Blog.Services.Interfaces;
 
 namespace Blog.Controllers;
@@ -24,9 +18,9 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("register")]
-    public IActionResult Register([FromBody] RegisterRequest newUserRequest)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest newUserRequest)
     {
-        var tokens = _authService.Register(newUserRequest);
+        var tokens = await _authService.RegisterAsync(newUserRequest);
         return Ok(new
         {
             tokens.AccessToken,
@@ -36,9 +30,9 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequest loginRequest)
+    public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
     {
-        var tokens = _authService.Login(loginRequest);
+        var tokens = await _authService.LoginAsync(loginRequest);
         return Ok(new
         {
             tokens.AccessToken,
@@ -48,9 +42,9 @@ public class AuthController : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("refresh-token")]
-    public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        var tokens = _authService.RefreshToken(request);
+        var tokens = await _authService.RefreshTokenAsync(request);
         return Ok(new
         {
             tokens.AccessToken,
@@ -58,4 +52,3 @@ public class AuthController : ControllerBase
         });
     }
 }
-

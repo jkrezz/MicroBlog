@@ -10,6 +10,7 @@ public class ImageModel
     /// <summary>
     /// Уникальный идентификатор изображения.
     /// </summary>
+    [Key]
     public Guid ImageId { get; set; } = Guid.NewGuid();
 
     /// <summary>

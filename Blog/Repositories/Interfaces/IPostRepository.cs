@@ -13,5 +13,8 @@ namespace Blog.Repositories.Interfaces
         Task AddPostAsync(PostModel post);
         Task UpdatePostAsync(PostModel post);
         Task DeletePostAsync(Guid postId);
+        Task AddImageAsync(ImageModel image);
+        Task<PostModel?> GetPostByIdempotencyKeyAsync(string idempotencyKey);
+
     }
 }
