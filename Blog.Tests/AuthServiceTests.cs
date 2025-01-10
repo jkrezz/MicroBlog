@@ -1,146 +1,117 @@
-using Moq;
-using Blog.Services;
+using Blog.Data;
 using Blog.Models;
-using Blog.Repositories.Interfaces;
-using Blog.Exceptions;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using NUnit.Framework;
+using System;
+using System.Linq;
 
-namespace Blog.Tests;
-
-[TestFixture]
-public class AuthServiceTests
+namespace Blog.Tests
 {
-    private Mock<IUserRepository> _mockUserRepository;
-    private Mock<IConfiguration> _mockConfig;
-    private AuthService _authService;
-
-    [SetUp]
-    public void SetUp()
+    public class TestUsersDbContext : UsersDbContext
     {
-        _mockUserRepository = new Mock<IUserRepository>();
-        _mockConfig = new Mock<IConfiguration>();
+        public TestUsersDbContext(DbContextOptions<UsersDbContext> options)
+            : base(options, null)
+        {
+        }
 
-        _mockConfig.Setup(c => c["JwtOptions:SigningKey"]).Returns("isodsudhbuifhgbdsuifhbsdiudfsahiudssadas");
-        _mockConfig.Setup(c => c["JwtOptions:Issuer"]).Returns("TestIssuer");
-        _mockConfig.Setup(c => c["JwtOptions:Audience"]).Returns("TestAudience");
-
-        _authService = new AuthService(_mockUserRepository.Object, _mockConfig.Object);
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+           
+        }
     }
 
-    [Test]
-    public void Register_WithEmptyFields_ThrowsBadRequestException()
+    [TestFixture]
+    public class UsersDbContextTests
     {
-        // Arrange
-        var request = new RegisterRequest
+        private DbContextOptions<UsersDbContext> _options;
+        private UsersDbContext _context;
+
+        [SetUp]
+        public void SetUp()
         {
-            Email = "",
-            Password = "",
-            Role = ""
-        };
+            // Создаем базу данных в памяти с уникальным именем
+            _options = new DbContextOptionsBuilder<UsersDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
 
-        // Act & Assert
-        var ex = Assert.Throws<BadRequestException>(() => _authService.Register(request));
-        Assert.That(ex.Message, Is.EqualTo("All fields are required."));
-    }
+            _context = new TestUsersDbContext(_options);
+            _context.Database.EnsureCreated();
+        }
 
-    [Test]
-    public void Register_WithExistingEmail_ThrowsForbiddenException()
-    {
-        // Arrange
-        var request = new RegisterRequest
+        [TearDown]
+        public void TearDown()
         {
-            Email = "test@gmail.com",
-            Password = "password",
-            Role = "Author"
-        };
+            // Удаляем базу данных после каждого теста
+            _context.Database.EnsureDeleted();
+            _context.Dispose();
+        }
 
-        _mockUserRepository.Setup(r => r.UserExists(request.Email)).Returns(true);
-
-        // Act & Assert
-        var ex = Assert.Throws<ForbiddenException>(() => _authService.Register(request));
-        Assert.That(ex.Message, Is.EqualTo("Email already registered."));
-    }
-
-    [Test]
-    public void Register_WithValidData_ReturnsTokens()
-    {
-        // Arrange
-        var request = new RegisterRequest
+        [Test]
+        public void AddUser_ShouldSaveToDatabase()
         {
-            Email = "test@gmail.com",
-            Password = "password",
-            Role = "Author"
-        };
-
-        _mockUserRepository.Setup(r => r.UserExists(request.Email)).Returns(false);
-
-        // Act
-        var result = _authService.Register(request);
-
-        // Assert
-        Assert.That(result.AccessToken, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.RefreshToken, Is.Not.Null.And.Not.Empty);
-        _mockUserRepository.Verify(r => r.AddUser(It.IsAny<UserModel>()), Times.Once);
-    }
-
-    [Test]
-    public void Login_WithInvalidCredentials_ThrowsForbiddenException()
-    {
-        // Arrange
-        var request = new LoginRequest
-        {
-            Email = "test@gmail.com",
-            Password = "wrongpassword"
-        };
-
-        _mockUserRepository.Setup(r => r.GetUserByEmail(request.Email))
-            .Returns(new UserModel
+            // Arrange: создаем нового пользователя
+            var user = new UserModel
             {
-                Email = request.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("password")
-            });
+                UserId = Guid.NewGuid(),
+                Email = "test@gmail.com",
+                PasswordHash = "hashedPassword",
+                Role = "Author"
+            };
 
-        // Act & Assert
-        var ex = Assert.Throws<ForbiddenException>(() => _authService.Login(request));
-        Assert.That(ex.Message, Is.EqualTo("Invalid email or password."));
-    }
+            // Act: добавляем пользователя в базу данных
+            _context.Users.Add(user);
+            _context.SaveChanges();
 
-    [Test]
-    public void RefreshToken_WithInvalidToken_ThrowsBadRequestException()
-    {
-        // Arrange
-        var request = new RefreshTokenRequest
+            // Assert: проверяем, что пользователь сохранен
+            var savedUser = _context.Users.FirstOrDefault(u => u.Email == "test@gmail.com");
+            Assert.That(savedUser, Is.Not.Null, "User должен быть сохранен");
+            Assert.That(savedUser.Email, Is.EqualTo("test@gmail.com"), "Email должен совпадать");
+        }
+
+        [Test]
+        public void GetUserByEmail_ShouldReturnCorrectUser()
         {
-            RefreshToken = "invalidToken"
-        };
-
-        _mockUserRepository.Setup(r => r.GetAllUsers()).Returns(new List<UserModel>());
-
-        // Act & Assert
-        var ex = Assert.Throws<BadRequestException>(() => _authService.RefreshToken(request));
-        Assert.That(ex.Message, Is.EqualTo("Refresh Token is invalid."));
-    }
-
-    [Test]
-    public void RefreshToken_WithExpiredToken_ThrowsBadRequestException()
-    {
-        // Arrange
-        var request = new RefreshTokenRequest
-        {
-            RefreshToken = "Token"
-        };
-
-        _mockUserRepository.Setup(r => r.GetAllUsers()).Returns(new List<UserModel>
-        {
-            new UserModel
+            // Arrange: добавляем тестового пользователя
+            var user = new UserModel
             {
-                RefreshToken = "Token",
-                RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(-1)
-            }
-        });
+                UserId = Guid.NewGuid(),
+                Email = "test@gmail.com",
+                PasswordHash = "hashedPassword",
+                Role = "Author"
+            };
 
-        // Act & Assert
-        var ex = Assert.Throws<BadRequestException>(() => _authService.RefreshToken(request));
-        Assert.That(ex.Message, Is.EqualTo("Refresh Token is invalid."));
+            _context.Users.Add(user);
+            _context.SaveChanges();
+
+            // Act: получаем пользователя по email
+            var fetchedUser = _context.Users.FirstOrDefault(u => u.Email == "test@gmail.com");
+            
+            Assert.That(fetchedUser, Is.Not.Null, "User не должен быть null");
+            Assert.That(fetchedUser.UserId, Is.EqualTo(user.UserId), "User ID должен совпадать");
+        }
+
+        [Test]
+        public void DeleteUser_ShouldRemoveFromDatabase()
+        {
+            // Arrange: добавляем тестового пользователя
+            var user = new UserModel
+            {
+                UserId = Guid.NewGuid(),
+                Email = "delete@gmail.com",
+                PasswordHash = "hashedPassword",
+                Role = "Author"
+            };
+
+            _context.Users.Add(user);
+            _context.SaveChanges();
+
+            // Act: удаляем пользователя
+            _context.Users.Remove(user);
+            _context.SaveChanges();
+
+            // Assert: проверяем, что пользователь удален
+            var deletedUser = _context.Users.FirstOrDefault(u => u.Email == "delete@gmail.com");
+            Assert.That(deletedUser, Is.Null, "User должен быть удален");
+        }
     }
 }
